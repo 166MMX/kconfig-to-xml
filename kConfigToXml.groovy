@@ -1,17 +1,18 @@
-#! /usr/bin/env groovy
+#!/usr/bin/env groovy
 import org.apache.commons.lang3.StringEscapeUtils
 
 import java.util.regex.Pattern
 
 @Grab(group='org.apache.commons', module='commons-lang3', version='3.2.1')
 
-class KConfigToXml {
-    static String S_TRI_STATE  = 'tristate'
-    static String S_STRING     = 'string'
-    static String S_HEX        = 'hex'
-    static String S_INT        = 'int'
-    static String S_BOOLEAN    = 'boolean'
-    static String S_BOOL       = 'bool'
+class KConfigToXml
+{
+    static String T_TRI_STATE  = 'tristate'
+    static String T_STRING     = 'string'
+    static String T_HEX        = 'hex'
+    static String T_INT        = 'int'
+    static String T_BOOLEAN    = 'boolean'
+    static String T_BOOL       = 'bool'
 
     static String T_DEFAULT            = 'default'
     static String T_DEFAULT_TRI_STATE  = 'def_tristate'
@@ -20,29 +21,39 @@ class KConfigToXml {
     static String T_CONFIG       = 'config'
     static String T_MENU_CONFIG  = 'menuconfig'
 
-    static String T_MAIN_MENU   = 'mainmenu'
-    static String T_MENU        = 'menu'
-    static String T_END_MENU    = 'endmenu'
-    static String T_CHOICE      = 'choice'
-    static String T_END_CHOICE  = 'endchoice'
-    static String T_IF          = 'if'
-    static String T_END_IF      = 'endif'
+    static String T_MAIN_MENU    = 'mainmenu'
+    static String T_MENU         = 'menu'
+    static String T_END_MENU     = 'endmenu'
+    static String T_CHOICE       = 'choice'
+    static String T_END_CHOICE   = 'endchoice'
+    static String T_IF           = 'if'
+    static String T_END_IF       = 'endif'
 
-    static String T_HELP        = 'help'
-    static String T_HELP_BOLD   = '---help---'
-    static String T_COMMENT     = 'comment'
+    static String T_HELP         = 'help'
+    static String T_HELP_BOLD    = '---help---'
+    static String T_COMMENT      = 'comment'
 
-    static String T_DEPENDS_ON  = 'depends on'
-    static String T_SELECT      = 'select'
+    static String T_DEPENDS_ON   = 'depends on'
+    static String T_SELECT       = 'select'
 
-    static String T_PROMPT      = 'prompt'
-    static String T_OPTIONAL    = 'optional'
-    static String T_RANGE       = 'range'
-    static String T_VISIBLE     = 'visible'
-    static String T_SOURCE      = 'source'
-    static String T_OPTION      = 'option'
+    static String T_PROMPT       = 'prompt'
+    static String T_OPTIONAL     = 'optional'
+    static String T_RANGE        = 'range'
+    static String T_VISIBLE      = 'visible'
+    static String T_SOURCE       = 'source'
+    static String T_OPTION       = 'option'
 
-    static def Pattern TOKENIZER = ~/'(?:[^\\']|\\.)*'|"(?:[^\\"]|\\.)*"|\s+#.*|[^\s]+/
+    static String T_AND                = '&&'
+    static String T_OR                 = '||'
+    static String T_PARENTHESIS_LEFT   = '('
+    static String T_PARENTHESIS_RIGHT  = ')'
+    static String T_NOT                = '!'
+    static String T_EQUAL              = '='
+    static String T_UNEQUAL            = '!='
+
+    static Pattern T_WORD        = ~/(?:[A-Za-z0-9_]|[-\/.])+/
+    static Pattern T_WORD_QUOTE  = ~/'(?:[^\\']|\\.)*'|"(?:[^\\"]|\\.)*"/
+    static Pattern TOKENIZER     = ~/'(?:[^\\']|\\.)*'|"(?:[^\\"]|\\.)*"|\s+#.*|[^\s]+/
 
 
     static def read (File kConfig)
@@ -56,16 +67,16 @@ class KConfigToXml {
             def sb = new StringBuilder()
             def tokens = line =~ TOKENIZER
             switch (tokens[0]) {
-                case S_BOOL:
-                case S_BOOLEAN:
-                case S_HEX:
-                case S_INT:
-                case S_STRING:
-                case S_TRI_STATE:
+                case T_BOOL:
+                case T_BOOLEAN:
+                case T_HEX:
+                case T_INT:
+                case T_STRING:
+                case T_TRI_STATE:
                     def type = tokens[0]
-                    if (type == S_BOOLEAN)
+                    if (type == T_BOOLEAN)
                     {
-                        type = S_BOOL
+                        type = T_BOOL
                     }
                     sb << '<type value="'
                     sb << StringEscapeUtils.escapeXml(type.toString())
@@ -81,7 +92,25 @@ class KConfigToXml {
                     break
 
                 case T_DEFAULT_BOOLEAN:
+                    sb << '<type value="'
+                    sb << T_BOOL
+                    sb << '">'
+                    sb << '</type>'
+                    sb << '<default if="'
+                    sb << '">'
+                    sb << StringEscapeUtils.escapeXml(tokens[1].toString())
+                    sb << '</default>'
+                    break
                 case T_DEFAULT_TRI_STATE:
+                    sb << '<type value="'
+                    sb << T_TRI_STATE
+                    sb << '">'
+                    sb << '</type>'
+                    sb << '<default if="'
+                    sb << '">'
+                    sb << StringEscapeUtils.escapeXml(tokens[1].toString())
+                    sb << '</default>'
+                    break
                 case T_DEFAULT:
                     sb << '<default if="'
                     sb << '">'
