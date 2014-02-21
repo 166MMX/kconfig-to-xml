@@ -1,8 +1,9 @@
+#!/usr/bin/env groovy
 import org.apache.commons.lang3.StringEscapeUtils
 
-@Grab(group='org.apache.commons', module='commons-lang3', version='3.2.1')
-
 import java.util.regex.Pattern
+
+@Grab(group='org.apache.commons', module='commons-lang3', version='3.2.1')
 
 class KConfigToXml {
     static String S_TRI_STATE  = 'tristate'
@@ -159,4 +160,10 @@ class KConfigToXml {
     }
 }
 
-KConfigToXml.read(new File('../resources/arch_x86_KConfig'))
+def cacheFile = new File('arch_x86_KConfig.cache')
+if (!cacheFile.exists())
+{
+    def sourceUrl = 'https://raw.github.com/torvalds/linux/master/arch/x86/Kconfig'
+    cacheFile.text = sourceUrl.toURL().text
+}
+KConfigToXml.read(cacheFile)
