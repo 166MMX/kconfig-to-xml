@@ -3,6 +3,7 @@
 import groovy.xml.XmlUtil
 import org.apache.commons.lang3.StringEscapeUtils
 
+import java.util.regex.Matcher
 import java.util.regex.Pattern
 
 @Grab(group='org.apache.commons', module='commons-lang3', version='3.2.1')
@@ -70,8 +71,8 @@ class KConfigToXml
     static String R_SYMBOL               = "(?:$R_COMMAND_WORD|$R_PARAM_WORD|$R_SINGLE_QUOTE_STRING|$R_DOUBLE_QUOTE_STRING)"
     static String R_EXPRESSION           = "(?:$R_SYMBOL\\s*$T_EQUAL\\s*$R_SYMBOL|$R_SYMBOL\\s*$T_UNEQUAL\\s*$R_SYMBOL|$R_SYMBOL)"
     static String R_EXPRESSION_NESTED    = "(?:\\(\\s*$R_EXPRESSION\\s*\\)|$T_NOT\\s*$R_EXPRESSION|$R_EXPRESSION\\s*\\|\\|\\s*$R_EXPRESSION|$R_EXPRESSION\\s*&&\\s*$R_EXPRESSION|$R_EXPRESSION)+"
-    static Pattern P_STRIP_SIMPLE_COMMENT  = ~/^\s*#.*$|\s*#[^'"]*$/
-    static Pattern P_STRIP_HELP_INDENT     = ~/^[ \t]+/
+    static Pattern P_SIMPLE_COMMENT = ~/^\s*#.*$|\s*#[^'"]*$/
+    static Pattern P_HELP_INDENT = ~/^[ \t]+/
     static Pattern P_COMMENT     = ~/$R_COMMENT/
     static Pattern P_WORD        = ~/$R_COMMAND_WORD|$R_PARAM_WORD/
     static Pattern P_WORD_QUOTE  = ~/$R_SINGLE_QUOTE_STRING|$R_DOUBLE_QUOTE_STRING/
@@ -137,27 +138,12 @@ class KConfigToXml
                 break
 
             case T_COMMENT:
-                while (isSimpleContainerNode(parent))
-                {
-                    parents.pop()
-                    parent = parents.peek()
-                }
-                break
             case T_CONFIG:
-                while (isSimpleContainerNode(parent))
-                {
-                    parents.pop()
-                    parent = parents.peek()
-                }
-                break
             case T_MENU_CONFIG:
-                while (isSimpleContainerNode(parent))
-                {
-                    parents.pop()
-                    parent = parents.peek()
-                }
-                break
             case T_MENU:
+            case T_IF:
+            case T_SOURCE:
+            case T_CHOICE:
                 while (isSimpleContainerNode(parent))
                 {
                     parents.pop()
@@ -168,23 +154,9 @@ class KConfigToXml
                 while (!(parent.name() == T_MENU || parent.name() == T_MENU_CONFIG))
                     parent = parents.pop()
                 break
-            case T_CHOICE:
-                if (isSimpleContainerNode(parent))
-                {
-                    parents.pop()
-                    parent = parents.peek()
-                }
-                break
             case T_END_CHOICE:
                 while (!(parent.name() == T_CHOICE))
                     parent = parents.pop()
-                break
-            case T_IF:
-                while (isSimpleContainerNode(parent))
-                {
-                    parents.pop()
-                    parent = parents.peek()
-                }
                 break
             case T_END_IF:
                 while (!(parent.name() == T_IF))
@@ -201,18 +173,44 @@ class KConfigToXml
             case T_PROMPT:
                 break
 
-            case T_SOURCE:
-                while (isSimpleContainerNode(parent))
-                {
-                    parents.pop()
-                    parent = parents.peek()
-                }
-                break
-
             default:
                 break
         }
         parent
+    }
+
+    static def Map readIfExpr (List<String> tokens, Map attributes)
+    {
+        int indexOfIf = tokens.indexOf(T_IF)
+        if (indexOfIf != -1)
+        {
+            if (attributes == null)
+            {
+                attributes = [:]
+            }
+            String expr = tokens[indexOfIf + 1]
+            attributes['if'] = expr
+        }
+        attributes
+    }
+
+    static def Node readPrompt (List<String> tokens, Node parent)
+    {
+        String prompt = null
+        if (tokens.size() > 1)
+        {
+            prompt = tokens[1]
+        }
+        if (prompt ==~ P_WORD_QUOTE)
+        {
+            prompt = prompt[1..-2]
+            prompt = StringEscapeUtils.unescapeJava(prompt)
+        }
+
+        Map attributes = null
+        attributes = readIfExpr(tokens, attributes)
+
+        new Node(parent, T_PROMPT, attributes, prompt)
     }
 
     static def void read (File kConfig)
@@ -252,18 +250,17 @@ class KConfigToXml
                         indent = ''
                     }
                     helpStringBuilder << indent
-                    helpStringBuilder << line.replaceAll(P_STRIP_HELP_INDENT, '')
+                    helpStringBuilder << line.replaceAll(P_HELP_INDENT, '')
                     helpStringBuilder << '\n'
                     return
                 }
             }
-            line = line.replaceAll(P_STRIP_SIMPLE_COMMENT, '')
+            line = line.replaceAll(P_SIMPLE_COMMENT, '')
             if (line.trim().empty)
             {
                 return
             }
-            def tokens = line =~ TOKENIZER
-            def tokensSize = tokens.size()
+            List<String> tokens = (line =~ TOKENIZER).collect {it.toString()}
             String command = tokens[0]
             Node parent = getParent(command, parents)
             switch (command) {
@@ -278,33 +275,13 @@ class KConfigToXml
                     {
                         typeValue = T_BOOL
                     }
-                    String prompt = null
-                    if (tokensSize > 1)
-                    {
-                        prompt = tokens[1]
-                    }
-                    if (prompt ==~ P_WORD_QUOTE)
-                    {
-                        prompt = prompt[1..-2]
-                        prompt = StringEscapeUtils.unescapeJava(prompt)
-                    }
 
                     Map typeAttributes = [
                             value: typeValue
                     ]
-                    Map promptAttributes = null
-                    if (tokensSize == 4 && tokens[2] == T_IF)
-                    {
-                        String ifExpr = tokens[3]
-                        promptAttributes = [:]
-                        promptAttributes['if'] = ifExpr
-                    }
 
-                    Node typeNode    = new Node(parent, 'type', typeAttributes)
-                    if (prompt)
-                    {
-                        new Node(typeNode, T_PROMPT, promptAttributes, prompt)
-                    }
+                    Node typeNode = new Node(parent, 'type', typeAttributes)
+                    readPrompt(tokens, typeNode)
                     break
 
                 case T_DEFAULT_BOOLEAN:
@@ -325,19 +302,15 @@ class KConfigToXml
                     Map attributes = null
                     String expr = tokens[1]
 
-                    if (tokensSize == 4 && tokens[2] == T_IF)
-                    {
-                        String ifExpr = tokens[3]
-                        attributes = [:]
-                        attributes['if'] = ifExpr
-                    }
-
+                    attributes = readIfExpr(tokens, attributes)
                     new Node(parent, T_DEFAULT, attributes, expr)
                     break
 
                 case T_IF:
-                    String expr = tokens[1]
-                    Node ifNode = new Node(parent, T_IF, [if:expr])
+                    Map attributes = null
+
+                    attributes = readIfExpr(tokens, attributes)
+                    Node ifNode = new Node(parent, T_IF, attributes)
                     parents << ifNode
                     break
                 case T_END_IF:
@@ -349,15 +322,8 @@ class KConfigToXml
                 case T_END_CHOICE:
                     break
                 case T_MENU:
-                    String prompt = tokens[1]
-                    if (prompt ==~ P_WORD_QUOTE)
-                    {
-                        prompt = prompt[1..-2]
-                        prompt = StringEscapeUtils.unescapeJava(prompt)
-                    }
-
                     Node menuNode = new Node(parent, T_MENU)
-                    new Node(menuNode, T_PROMPT, null, prompt)
+                    readPrompt(tokens, menuNode)
                     parents << menuNode
                     break
                 case T_END_MENU:
@@ -376,15 +342,8 @@ class KConfigToXml
                     break
 
                 case T_COMMENT:
-                    String prompt = tokens[1]
-                    if (prompt ==~ P_WORD_QUOTE)
-                    {
-                        prompt = prompt[1..-2]
-                        prompt = StringEscapeUtils.unescapeJava(prompt)
-                    }
-
                     Node commentNode = new Node(parent, T_COMMENT)
-                    new Node(commentNode, T_PROMPT, null, prompt)
+                    readPrompt(tokens, commentNode)
                     parents << commentNode
                     break
 
@@ -406,49 +365,21 @@ class KConfigToXml
                     Map attributes = null
                     String symbol = tokens[1]
 
-                    if (tokensSize == 4 && tokens[2] == T_IF)
-                    {
-                        String ifExpr = tokens[3]
-                        attributes = [:]
-                        attributes['if'] = ifExpr
-                    }
-
+                    attributes = readIfExpr(tokens, attributes)
                     new Node(parent, T_SELECT, attributes, symbol)
                     break
 
                 case T_RANGE:
                     Map attributes = [:]
-                    String from = tokens[1]
-                    String to = tokens[2]
+                    attributes['from'] = tokens[1]
+                    attributes['to'] = tokens[2]
 
-                    attributes['from'] = from
-                    attributes['to'] = to
-                    if (tokensSize == 5 && tokens[3] == T_IF)
-                    {
-                        String ifExpr = tokens[4]
-                        attributes['if'] = ifExpr
-                    }
-
+                    attributes = readIfExpr(tokens, attributes)
                     new Node(parent, T_RANGE, attributes)
                     break
 
                 case T_PROMPT:
-                    Map attributes = null
-                    String prompt = tokens[1]
-                    if (prompt ==~ P_WORD_QUOTE)
-                    {
-                        prompt = prompt[1..-2]
-                        prompt = StringEscapeUtils.unescapeJava(prompt)
-                    }
-
-                    if (tokensSize == 3 && tokens[1] == T_IF)
-                    {
-                        String ifExpr = tokens[2]
-                        attributes = [:]
-                        attributes['if'] = ifExpr
-                    }
-
-                    new Node(parent, T_PROMPT, attributes, prompt)
+                    readPrompt(tokens, parent)
                     break
 
                 case T_SOURCE:
