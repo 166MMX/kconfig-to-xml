@@ -69,8 +69,10 @@ class KConfigToXml
     static String R_COMMAND_WORD         = '(?:[A-Za-z0-9_])+'
     static String R_PARAM_WORD           = '(?:[A-Za-z0-9_]|[-/.])+'
     static String R_SYMBOL               = "(?:$R_COMMAND_WORD|$R_PARAM_WORD|$R_SINGLE_QUOTE_STRING|$R_DOUBLE_QUOTE_STRING)"
-    static String R_EXPRESSION           = "(?:$R_SYMBOL\\s*$T_EQUAL\\s*$R_SYMBOL|$R_SYMBOL\\s*$T_UNEQUAL\\s*$R_SYMBOL|$R_SYMBOL)"
-    static String R_EXPRESSION_NESTED    = "(?:\\(\\s*$R_EXPRESSION\\s*\\)|$T_NOT\\s*$R_EXPRESSION|$R_EXPRESSION\\s*\\|\\|\\s*$R_EXPRESSION|$R_EXPRESSION\\s*&&\\s*$R_EXPRESSION|$R_EXPRESSION)+"
+    static String R_EXPR_SIMPLE          = "(?:$R_SYMBOL\\s*$T_EQUAL\\s*$R_SYMBOL|$R_SYMBOL\\s*$T_UNEQUAL\\s*$R_SYMBOL|$R_SYMBOL)"
+    static String R_EXPR_ENCLOSED        = "(?:\\(\\s*$R_EXPR_SIMPLE\\s*\\))"
+    static String R_EXPR                 = "(?:(?:$T_NOT\\s*)?$R_EXPR_SIMPLE|(?:(?:$T_NOT\\s*)?$R_EXPR_ENCLOSED)+)"
+    static String R_EXPRESSION_NESTED    = "(?:$R_EXPR(?:\\s*(?:\\|\\||&&)\\s*$R_EXPR)*)"
     static Pattern P_SIMPLE_COMMENT = ~/^\s*#.*$|\s*#[^'"]*$/
     static Pattern P_HELP_INDENT = ~/^[ \t]+/
     static Pattern P_COMMENT     = ~/$R_COMMENT/
