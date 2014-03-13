@@ -2,67 +2,78 @@ import java.util.regex.Pattern
 
 class HelpReader
 {
-    private static  def int            INIT_INDENT_LENGTH  = -1
-    private static  def Pattern        P_HELP_INDENT       = ~/^[ \t]+/
+    private static  def Pattern        TRIM_PATTERN  = ~/^[ \t]+|\s+$/
+    private static  def int            INIT_LENGTH   = -1
 
-    private         def int            firstLength         = INIT_INDENT_LENGTH
-    private         def StringBuilder  sb                  = null
-    private         def Node           parent              = null
-    private         def boolean        active              = false
+    private         def boolean        active        = false
+    private         def int            baseIndent    = INIT_LENGTH
+    private         def StringBuilder  sb            = new StringBuilder()
 
-    def void start (Node parent)
+    def boolean getActive ()
+    {
+        return active
+    }
+
+    def void start ()
     {
         reset()
         active       = true
-        this.parent  = parent
-
     }
 
     def void reset ()
     {
-        firstLength  = INIT_INDENT_LENGTH
-        sb           = new StringBuilder()
         active       = false
-        parent       = null
+        baseIndent   = INIT_LENGTH
+        sb.length    = 0
     }
 
-    def void finish ()
+    def String read (String line)
     {
-        String helpText  = sb.toString().trim()
-        new Node(parent, 'help', null, helpText)
-        active           = false
-        reset()
-    }
-
-    def boolean read (String line)
-    {
-        boolean emptyBuilder = sb.size() == 0
-
-        if (!emptyBuilder && line.trim().empty)
+        if (line.trim().empty)
         {
-            sb << '\n'
-            return false
+            if (sb.length() != 0)
+            {
+                sb << '\n'
+            }
+            return null
         }
 
-        String indent = getIndent (line)
+        def String indent = getIndent(line)
         if (indent != null)
         {
             sb << indent
-            sb << line.replaceAll(P_HELP_INDENT, '')
+            sb << line.replaceAll(TRIM_PATTERN, '')
             sb << '\n'
-            return false
+            return null
         }
 
-        finish()
-        return true
+        def String text = finish()
+        return text
+    }
+
+    private def String finish ()
+    {
+        def String text = sb.toString().normalize().expand()
+
+        for (def int i = text.length() - 1; i >= 0; i--)
+        {
+            if (text[i] == '\n')
+                continue
+            text = text[0..i]
+            break
+        }
+
+        reset()
+
+        return text
     }
 
     private def String getIndent (String line)
     {
-        int lineLength = line.length()
+        int l = line.length()
         int indentLength = 0
 
-        for (int i = 0; i < lineLength; i++)
+        for (int i = 0; i < l; i++)
             if (line[i] == '\t')
                 indentLength = (indentLength & ~7) + 8
             else if (line[i] == ' ')
@@ -71,21 +82,16 @@ class HelpReader
                 break
 
         String indent = null
-        if (firstLength == INIT_INDENT_LENGTH)
+        if (baseIndent == INIT_LENGTH)
         {
-            firstLength = indentLength
+            baseIndent = indentLength
             indent = ''
         }
-        else if (indentLength >= firstLength)
+        else if (indentLength >= baseIndent)
         {
-            indentLength -= firstLength
+            indentLength -= baseIndent
             indent = (' ' * indentLength)
         }
-        indent
-    }
-
-    boolean getActive ()
-    {
-        return active
+        return indent
     }
 }

@@ -62,7 +62,7 @@ class LkcReader
     static String R_DOUBLE_QUOTE_STRING  = '\"(?:[^\\\\\"]|\\\\.)*?\"'
     static String R_COMMAND_WORD         = '(?:[A-Za-z0-9_])+'
     static String R_PARAM_WORD           = '(?:[A-Za-z0-9_]|[-/.])+'
-    static String R_SYMBOL               = "(?:$R_COMMAND_WORD|$R_PARAM_WORD|$R_SINGLE_QUOTE_STRING|$R_DOUBLE_QUOTE_STRING)"
+    static String R_SYMBOL               = "(?:$R_PARAM_WORD|$R_COMMAND_WORD|$R_SINGLE_QUOTE_STRING|$R_DOUBLE_QUOTE_STRING)"
     static String R_EXPR_SIMPLE          = "(?:$R_SYMBOL\\s*$T_EQUAL\\s*$R_SYMBOL|$R_SYMBOL\\s*$T_UNEQUAL\\s*$R_SYMBOL|$R_SYMBOL)"
     static String R_EXPR_ENCLOSED        = "(?:\\(\\s*$R_EXPR_SIMPLE\\s*\\))"
     static String R_EXPR                 = "(?:(?:$T_NOT\\s*)?$R_EXPR_SIMPLE|(?:(?:$T_NOT\\s*)?$R_EXPR_ENCLOSED)+)"
@@ -168,20 +168,29 @@ class LkcReader
 
     static def Node read (File kConfig)
     {
-        Stack<Node> parents = new Stack<>()
-        def Node root = new Node(null, T_MENU)
+        def StringBuilder  multiLineBuffer  = new StringBuilder()
+        def HelpReader     helpReader       = new HelpReader()
+        def Stack<Node>    parents          = new Stack<>()
+        def Node           root             = new Node(null, T_MENU)
+        def Node           node
+        def Node           parent
+        def Map            attr
+        def String         command
+        def String         prompt
+        def String         condition
+        def String         helpText
+
         parents << root
-
-        HelpReader helpReader = new HelpReader()
-
         kConfig.text.eachLine { String line, int count ->
             if (helpReader.active)
             {
-                helpReader.read(line)
-                if (helpReader.active)
+                helpText    = helpReader.read(line)
+                if (helpText == null)
                 {
                     return
                 }
+                node        = parents.pop()
+                node.value  = helpText
             }
 
             line = line.replaceAll(P_SIMPLE_COMMENT, '')
@@ -189,21 +198,79 @@ class LkcReader
             {
                 return
             }
+            if (line.endsWith('\\'))
+            {
+                multiLineBuffer << line
+                multiLineBuffer << '\n'
+                return
+            }
+            else if (multiLineBuffer.length() > 0)
+            {
+                multiLineBuffer << line
+                line = multiLineBuffer.toString()
+                line = line.replaceAll(~/\\\n/, ' ')
+                multiLineBuffer.length = 0
+            }
 
             List<String> tokens = (line =~ TOKENIZER).collect {it.toString()}
-            String command = tokens[0]
 
-            def Map   attr    = [:]
-            def Node  parent  = getParent(command, parents)
-            def Node  node
-            def String prompt     = getPrompt(tokens)
-            def String condition  = getCondition(tokens)
+            command    = tokens[0]
+            prompt     = getPrompt(tokens)
+            condition  = getCondition(tokens)
+            attr       = [:]
+            parent     = getParent(command, parents)
+            node
             switch (command)
             {
                 case T_HELP:
                 case T_HELP_BOLD:
-                    helpReader.start(parent)
+                    helpReader.start()
+                    node = new Node(parent, T_HELP)
+                    parents << node
                     break
+
+                case T_IF:
+                    if (condition)
+                        attr.condition   = condition
+                    node = new Node(parent, command, attr)
+                    parents << node
+                    break
+                case T_END_IF:
+                    break
+                case T_CHOICE:
+                    node = new Node(parent, command, null)
+                    parents << node
+                    break
+                case T_END_CHOICE:
+                    break
+                case T_MENU:
+                    if (prompt)
+                        attr.prompt      = prompt
+                    node = new Node(parent, command, attr)
+                    parents << node
+                    break
+                case T_END_MENU:
+                    break
+
+                case T_CONFIG:
+                    attr.symbol      = tokens[1]
+                    node = new Node(parent, command, attr)
+                    parents << node
+                    break
+
+                case T_MENU_CONFIG:
+                    attr.symbol      = tokens[1]
+                    node = new Node(parent, command, attr)
+                    parents << node
+                    break
+
+                case T_COMMENT:
+                    if (prompt)
+                        attr.prompt      = prompt
+                    node = new Node(parent, command, attr)
+                    parents << node
+                    break
+
 
                 case T_BOOL:
                 case T_BOOLEAN:
@@ -234,6 +301,16 @@ class LkcReader
                     new Node(parent, command, attr)
                     break
 
+                case T_VISIBLE:
+                    if (condition)
+                        attr.condition   = condition
+                    new Node(parent, command, attr)
+                    break
+
+                case T_OPTIONAL:
+                    new Node(parent, command)
+                    break
+
                 case T_RANGE:
                     attr.from        = tokens[1]
                     attr.to          = tokens[2]
@@ -243,7 +320,8 @@ class LkcReader
                     break
 
                 case T_PROMPT:
-                    attr.text        = getPrompt(tokens)
+                    if (prompt)
+                        attr.text        = prompt
                     if (condition)
                         attr.condition   = condition
                     new Node(parent, command, attr)
@@ -259,51 +337,18 @@ class LkcReader
                     new Node(parent, command, attr)
                     break
 
-                case T_IF:
-                    if (condition)
-                        attr.condition   = condition
-                    node = new Node(parent, command, attr)
-                    parents << node
-                    break
-                case T_END_IF:
-                    break
-                case T_CHOICE:
-                    node = new Node(parent, command, null)
-                    parents << node
-                    break
-                case T_END_CHOICE:
-                    break
-                case T_MENU:
-                    attr.prompt      = getPrompt(tokens)
-                    node = new Node(parent, command, attr)
-                    parents << node
-                    break
-                case T_END_MENU:
-                    break
-
-                case T_CONFIG:
-                    attr.symbol      = tokens[1]
-                    node = new Node(parent, command, attr)
-                    parents << node
-                    break
-
-                case T_MENU_CONFIG:
-                    attr.symbol      = tokens[1]
-                    node = new Node(parent, command, attr)
-                    parents << node
-                    break
-
-                case T_COMMENT:
-                    attr.prompt      = getPrompt(tokens)
-                    node = new Node(parent, command, attr)
-                    parents << node
-                    break
 
                 default:
-                    println "$count: $line"
+                    println "$kConfig.name:$count: $line"
                     break
             }
             return
+        }
+        if (helpReader.active)
+        {
+            helpText    = helpReader.read('EOF')
+            node        = parents.pop()
+            node.value  = helpText
         }
         root
     }
