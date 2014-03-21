@@ -1,8 +1,8 @@
+package name.harth.conv.direct
+
 import org.apache.commons.lang3.StringEscapeUtils
 
 import java.util.regex.Pattern
-
-@Grab(group='org.apache.commons', module='commons-lang3', version='3.2.1')
 
 class LkcReader
 {

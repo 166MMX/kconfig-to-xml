@@ -1,3 +1,5 @@
+package name.harth.conv.model
+
 enum ExpressionType
 {
     NONE,

@@ -1,3 +1,5 @@
+package name.harth.conv.direct
+
 import java.util.regex.Pattern
 
 class HelpReader

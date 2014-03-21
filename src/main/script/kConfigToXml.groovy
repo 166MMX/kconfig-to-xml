@@ -1,6 +1,5 @@
-#!/usr/bin/env groovy
-
 import groovy.xml.XmlUtil
+import name.harth.conv.direct.LkcReader
 
 def Queue<String> input   = new LinkedList<>()
 def Queue<String> output  = new LinkedList<>()
@@ -18,9 +17,9 @@ while (input.size() > 0)
     output << currentFileName
 
     def simpleFileName   = currentFileName.tr('/', '_')
-    def cacheFileName    = 'test/' + simpleFileName + '.cache'
+    def cacheFileName    = 'res/' + simpleFileName + '.cache'
     def cacheFile        = new File(cacheFileName)
-    def xmlFileName      = 'test/' + simpleFileName + '.xml'
+    def xmlFileName      = 'res/' + simpleFileName + '.xml'
     def xmlFile          = new File(xmlFileName)
 
     if (!cacheFile.exists())
