@@ -1,3 +1,6 @@
+.gradle
+src/main/script/res
+
 *.class
 
 # Package Files #
