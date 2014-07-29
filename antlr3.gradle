@@ -1,0 +1,82 @@
+//USAGE: apply from: 'antlr3.gradle'
+
+configurations {
+    antlr
+}
+
+dependencies {
+    antlr    'org.antlr:antlr:3.5.2'
+    compile  'org.antlr:antlr-runtime:3.5.2'
+}
+
+task distributeGrammarSourceOutput << {
+    inputs.files.each { File source ->
+        copy {
+            from source
+            into outputs.files.filter {it.name == source.name}.singleFile.parent
+        }
+    }
+    delete inputs.files
+}
+
+task generateGrammarSource(type: JavaExec) {
+    def languageName = 'antlr'
+    def sourceSetName = 'main'
+    def inputTree = fileTree("$project.projectDir/src/$sourceSetName/$languageName")
+    def outputDir = file("$project.buildDir/generated-src/$languageName/$sourceSetName")
+
+    inputTree.include '**/*.g'
+    mkdir(outputDir)
+
+    inputs.files inputTree
+    outputs.dir outputDir
+    finalizedBy distributeGrammarSourceOutput
+
+    description = 'Generates Java sources from Antlr3 grammars.'
+    main = 'org.antlr.Tool'
+    classpath = configurations.antlr
+    args = ["-o", outputDir, inputTree.files].flatten()
+
+    inputTree.files.each { file ->
+        def grammarFile = inputTree.dir.toPath().relativize(file.toPath())
+        def grammarPrefix = grammarFile.fileName.toString()[0..-3]
+        ['Lexer.java', 'Parser.java', '.tokens'].each { suffix ->
+            distributeGrammarSourceOutput.inputs.file "$outputDir/$grammarPrefix$suffix"
+            distributeGrammarSourceOutput.outputs.file "$outputDir/$grammarFile.parent/$grammarPrefix$suffix"
+        }
+    }
+}
+
+task generateTestGrammarSource(type: JavaExec) {
+    def languageName = 'antlr'
+    def sourceSetName = 'test'
+    def inputTree = fileTree("$project.projectDir/src/$sourceSetName/$languageName")
+    def outputDir = file("$project.buildDir/generated-src/$languageName/$sourceSetName")
+
+    inputTree.include '**/*.g'
+    mkdir(outputDir)
+
+    inputs.files inputTree
+    outputs.dir outputDir
+    finalizedBy distributeGrammarSourceOutput
+
+    description = 'Generates Java sources from Antlr3 grammars.'
+    main = 'org.antlr.Tool'
+    classpath = configurations.antlr
+    args = ["-o", outputDir, inputTree.files].flatten()
+
+    inputTree.files.each { file ->
+        def grammarFile = inputTree.dir.toPath().relativize(file.toPath())
+        def grammarPrefix = grammarFile.fileName.toString()[0..-3]
+        ['Lexer.java', 'Parser.java', '.tokens'].each { suffix ->
+            distributeGrammarSourceOutput.inputs.file "$outputDir/$grammarPrefix$suffix"
+            distributeGrammarSourceOutput.outputs.file "$outputDir/$grammarFile.parent/$grammarPrefix$suffix"
+        }
+    }
+}
+
+sourceSets.main.java.srcDir  generateGrammarSource.outputs.files.singleFile
+sourceSets.test.java.srcDir  generateTestGrammarSource.outputs.files.singleFile
+
+compileJava.dependsOn        generateGrammarSource
+compileTestJava.dependsOn    generateTestGrammarSource
