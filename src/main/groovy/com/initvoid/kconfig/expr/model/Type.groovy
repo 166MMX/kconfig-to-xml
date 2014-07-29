@@ -1,6 +1,6 @@
-package name.harth.conv.model
+package com.initvoid.kconfig.expr.model
 
-enum ExpressionType
+enum Type
 {
     NONE,
     OR,

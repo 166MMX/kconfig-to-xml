@@ -1,4 +1,4 @@
-package name.harth.conv.model
+package com.initvoid.kconfig.expr.obsolete
 
 enum PropertyType
 {
