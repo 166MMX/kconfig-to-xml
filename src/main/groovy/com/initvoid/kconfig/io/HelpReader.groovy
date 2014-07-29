@@ -1,7 +1,10 @@
-package name.harth.conv.direct
+package com.initvoid.kconfig.io
+
+import groovy.transform.CompileStatic
 
 import java.util.regex.Pattern
 
+@CompileStatic
 class HelpReader
 {
     private static  def Pattern        TRIM_PATTERN  = ~/^[ \t]+|\s+$/

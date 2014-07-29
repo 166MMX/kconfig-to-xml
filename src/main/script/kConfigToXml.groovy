@@ -1,10 +1,10 @@
 import groovy.xml.XmlUtil
-import name.harth.conv.direct.LkcReader
+import com.initvoid.kconfig.io.LkcReader
 
 def Queue<String> input   = new LinkedList<>()
 def Queue<String> output  = new LinkedList<>()
 
-def base      = 'https://raw.github.com/torvalds/linux/master'
+def baseUrl   = 'https://raw.github.com/torvalds/linux/master'
 def archList  = ['alpha', 'arc', 'arm', 'arm64', 'avr32', 'blackfin', 'c6x', 'cris', 'frv', 'hexagon', 'ia64', 'm32r', 'm68k', 'metag', 'microblaze', 'mips', 'mn10300', 'openrisc', 'parisc', 'powerpc', 's390', 'score', 'sh', 'sparc', 'tile', 'unicore32', 'x86', 'xtensa']
 
 archList.each {
@@ -14,17 +14,15 @@ archList.each {
 while (input.size() > 0)
 {
     def currentFileName  = input.pop()
-    output << currentFileName
-
     def simpleFileName   = currentFileName.tr('/', '_')
-    def cacheFileName    = 'res/' + simpleFileName + '.cache'
-    def cacheFile        = new File(cacheFileName)
-    def xmlFileName      = 'res/' + simpleFileName + '.xml'
-    def xmlFile          = new File(xmlFileName)
+    def cacheFile        = new File("res/${simpleFileName}.cache")
+    def xmlFile          = new File("res/${simpleFileName}.xml")
+
+    output << currentFileName
 
     if (!cacheFile.exists())
     {
-        def sourceUrl    = base + '/' + currentFileName
+        def sourceUrl    = "$baseUrl/$currentFileName"
         cacheFile.text   = sourceUrl.toURL().text
     }
 
